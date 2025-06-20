@@ -1,0 +1,655 @@
+{
+	"info": {
+		"name": "Chatter API Collection",
+		"description": "Complete API testing collection for Chatter Real-time Chat App",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health & Info",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						}
+					}
+				},
+				{
+					"name": "API Documentation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api",
+							"host": ["{{base_url}}"],
+							"path": ["api"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('user1_token', responseJson.data.token);",
+									"    pm.environment.set('user1_id', responseJson.data.user._id);",
+									"    pm.environment.set('user1_refresh_token', responseJson.data.refreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testuser1\",\n    \"email\": \"testuser1@example.com\",\n    \"password\": \"Password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register User 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('user2_token', responseJson.data.token);",
+									"    pm.environment.set('user2_id', responseJson.data.user._id);",
+									"    pm.environment.set('user2_refresh_token', responseJson.data.refreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testuser2\",\n    \"email\": \"testuser2@example.com\",\n    \"password\": \"Password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login User 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('user1_token', responseJson.data.token);",
+									"    pm.environment.set('user1_refresh_token', responseJson.data.refreshToken);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"testuser1@example.com\",\n    \"password\": \"Password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get My Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bio\": \"Updated bio from Postman!\",\n    \"phoneNumber\": \"+1234567890\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Search Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/search?q=testuser2",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "testuser2"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "logout"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Chats",
+			"item": [
+				{
+					"name": "Create Private Chat",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('private_chat_id', responseJson.data.chat._id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"{{user2_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chats/private",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats", "private"]
+						}
+					}
+				},
+				{
+					"name": "Create Group Chat",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('group_chat_id', responseJson.data.chat._id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"users\": [\"{{user2_id}}\"],\n    \"chatName\": \"Test Group Chat\",\n    \"groupDescription\": \"This is a test group created from Postman\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chats/group",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats", "group"]
+						}
+					}
+				},
+				{
+					"name": "Get All Chats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats"]
+						}
+					}
+				},
+				{
+					"name": "Get Chat Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chats/{{private_chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats", "{{private_chat_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update Group Chat",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"chatName\": \"Updated Group Name\",\n    \"groupDescription\": \"Updated description from Postman\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/chats/{{group_chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats", "{{group_chat_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Mark Chat as Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/chats/{{private_chat_id}}/read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "chats", "{{private_chat_id}}", "read"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Messages",
+			"item": [
+				{
+					"name": "Send Text Message",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    pm.environment.set('message_id', responseJson.data.message._id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"Hello! This is a test message from Postman 🚀\",\n    \"messageType\": \"text\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{private_chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{private_chat_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get Chat Messages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{private_chat_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{private_chat_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Edit Message",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"content\": \"Hello! This is an EDITED test message from Postman ✨\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Add Message Reaction",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"emoji\": \"👍\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}/react",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}", "react"]
+						}
+					}
+				},
+				{
+					"name": "Mark Message as Read",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}/read",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}", "read"]
+						}
+					}
+				},
+				{
+					"name": "Search Messages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{private_chat_id}}/search?q=test",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{private_chat_id}}", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "test"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Forward Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"chatIds\": [\"{{group_chat_id}}\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}/forward",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}", "forward"]
+						}
+					}
+				},
+				{
+					"name": "Remove Message Reaction",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"emoji\": \"👍\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}/react",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}", "react"]
+						}
+					}
+				},
+				{
+					"name": "Delete Message",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{user1_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/messages/{{message_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "messages", "{{message_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Error Testing",
+			"item": [
+				{
+					"name": "Invalid Token Test",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer invalid_token_here"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Validation Error Test",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"ab\",\n    \"email\": \"invalid-email\",\n    \"password\": \"123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000"
+		}
+	]
+}

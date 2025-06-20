@@ -1,0 +1,57 @@
+{
+	"id": "chatter-api-environment",
+	"name": "Chatter API Environment",
+	"values": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"enabled": true
+		},
+		{
+			"key": "user1_token",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "user2_token",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "user1_id",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "user2_id",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "user1_refresh_token",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "user2_refresh_token",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "private_chat_id",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "group_chat_id",
+			"value": "",
+			"enabled": true
+		},
+		{
+			"key": "message_id",
+			"value": "",
+			"enabled": true
+		}
+	],
+	"_postman_variable_scope": "environment"
+}
