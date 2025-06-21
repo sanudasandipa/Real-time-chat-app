@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket Test</title>
+</head>
+<body>
+    <h1>Socket Connection Test</h1>
+    <div id="status">Checking connection...</div>
+    <div id="messages"></div>
+    
+    <input type="text" id="messageInput" placeholder="Type a message...">
+    <button onclick="sendMessage()">Send Message</button>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4NTZjZjY1ZTZiNTQxMTUyNjI3YzA0YSIsImlhdCI6MTczNDc5ODM5OCwiZXhwIjoxNzM1NDAzMTk4fQ.YhGKrUCDfbtOhPBa7J1Uw1rrr0pBx9HHqkk6a8SNZSI'; // Replace with actual token
+        const chatId = '6856cf66e6b541152627c05b';
+        
+        const socket = io('http://localhost:5000', {
+            auth: { token }
+        });
+        
+        socket.on('connect', () => {
+            document.getElementById('status').innerHTML = '✅ Connected: ' + socket.id;
+            socket.emit('join-chat', chatId);
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('status').innerHTML = '❌ Disconnected';
+        });
+        
+        socket.on('new-message', (message) => {
+            console.log('Received message:', message);
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML += `<div>${message.sender.username}: ${message.content}</div>`;
+        });
+        
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value;
+            if (message.trim()) {
+                socket.emit('send-message', {
+                    chatId: chatId,
+                    content: message,
+                    messageType: 'text'
+                });
+                input.value = '';
+            }
+        }
+        
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

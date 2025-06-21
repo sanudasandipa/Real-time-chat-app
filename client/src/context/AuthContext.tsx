@@ -10,6 +10,10 @@ interface User {
   email: string;
   profilePic?: string;
   isOnline?: boolean;
+  bio?: string;
+  phoneNumber?: string;
+  location?: string;
+  lastSeen?: string;
 }
 
 interface AuthContextType {

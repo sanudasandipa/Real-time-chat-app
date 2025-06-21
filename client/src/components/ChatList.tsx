@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { chatAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import socketService from '../services/socket';
 import toastService from '../services/toast';
 import { getChatImage } from '../utils/placeholders';
 import './ChatList.css';
@@ -13,6 +14,9 @@ interface Chat {
   chatName?: string;
   groupImage?: string;
   createdAt: string;
+  displayName?: string;
+  displayImage?: string;
+  unreadCount?: number;
 }
 
 interface ChatListProps {
@@ -26,10 +30,51 @@ const ChatList: React.FC<ChatListProps> = ({ selectedChat, onChatSelect, onNewCh
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const { user } = useAuth();
-
   useEffect(() => {
     fetchChats();
-  }, []);
+    
+    // Set up socket listeners for real-time chat updates
+    const socket = socketService.getSocket();
+    if (socket) {
+      // Listen for new chats
+      socket.on('new-chat', (newChat: Chat) => {
+        setChats(prev => {
+          const exists = prev.find(chat => chat._id === newChat._id);
+          if (exists) return prev;
+          return [newChat, ...prev];
+        });
+      });
+
+      // Listen for chat updates (new messages, etc.)
+      socket.on('chat-updated', (updatedChat: Chat) => {
+        setChats(prev => prev.map(chat => 
+          chat._id === updatedChat._id ? { ...chat, ...updatedChat } : chat
+        ));
+      });
+
+      // Listen for new messages to update latest message
+      socket.on('new-message', (message: any) => {
+        setChats(prev => prev.map(chat => {
+          if (chat._id === message.chat) {
+            return {
+              ...chat,
+              latestMessage: message,
+              unreadCount: (chat.unreadCount || 0) + (message.sender._id !== user?._id ? 1 : 0)
+            };
+          }
+          return chat;
+        }));
+      });
+    }
+
+    return () => {
+      if (socket) {
+        socket.off('new-chat');
+        socket.off('chat-updated');
+        socket.off('new-message');
+      }
+    };
+  }, [user]);
 
   const fetchChats = async () => {
     try {
@@ -43,8 +88,10 @@ const ChatList: React.FC<ChatListProps> = ({ selectedChat, onChatSelect, onNewCh
       setLoading(false);
     }
   };
-
   const getChatName = (chat: Chat) => {
+    if (chat.displayName) {
+      return chat.displayName;
+    }
     if (chat.isGroup) {
       return chat.chatName || 'Group Chat';
     }
@@ -53,6 +100,9 @@ const ChatList: React.FC<ChatListProps> = ({ selectedChat, onChatSelect, onNewCh
   };
 
   const getChatImageSrc = (chat: Chat) => {
+    if (chat.displayImage) {
+      return chat.displayImage;
+    }
     return getChatImage(chat, user, 48);
   };
 
@@ -143,12 +193,15 @@ const ChatList: React.FC<ChatListProps> = ({ selectedChat, onChatSelect, onNewCh
                         {formatTime(chat.latestMessage.createdAt)}
                       </span>
                     )}
-                  </div>
-                  <div className="chat-preview">
+                  </div>                  <div className="chat-preview">
                     <p className="last-message">
                       {getLastMessagePreview(chat)}
                     </p>
-                    {/* Add unread count if needed */}
+                    {chat.unreadCount && chat.unreadCount > 0 && (
+                      <span className="unread-badge">
+                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

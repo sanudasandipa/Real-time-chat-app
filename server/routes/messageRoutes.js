@@ -9,9 +9,11 @@ const {
   deleteMessage,
   addReaction,
   removeReaction,
-  markMessageAsRead,
-  forwardMessage,
-  searchMessages
+  searchMessages,
+  markMessageDelivered,
+  markMessageRead,
+  getMessageStatus,
+  getUnreadCount
 } = require('../controllers/messageController');
 
 // Import middlewares
@@ -33,12 +35,14 @@ router.use(protect);
 router.get('/:chatId', [validateMongoId('chatId'), requireChatMembership, validatePagination], getMessages);
 router.post('/:chatId', [validateMongoId('chatId'), requireChatMembership, chatMediaUpload.single('media'), validateMessageSend], sendMessage);
 router.get('/:chatId/search', [validateMongoId('chatId'), requireChatMembership, validateSearch, validatePagination], searchMessages);
+router.get('/:chatId/unread-count', [validateMongoId('chatId'), requireChatMembership], getUnreadCount);
 
 // Individual message routes
+router.get('/:messageId/status', [validateMongoId('messageId')], getMessageStatus);
 router.put('/:messageId', [validateMongoId('messageId'), validateMessageUpdate], editMessage);
 router.delete('/:messageId', validateMongoId('messageId'), deleteMessage);
-router.post('/:messageId/read', validateMongoId('messageId'), markMessageAsRead);
-router.post('/:messageId/forward', validateMongoId('messageId'), forwardMessage);
+router.put('/:messageId/delivered', validateMongoId('messageId'), markMessageDelivered);
+router.put('/:messageId/read', validateMongoId('messageId'), markMessageRead);
 
 // Message reactions
 router.post('/:messageId/react', [validateMongoId('messageId'), validateReaction], addReaction);

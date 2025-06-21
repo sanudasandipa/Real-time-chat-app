@@ -19,17 +19,20 @@ const initializeSocket = (server) => {
   });
 
   // Socket authentication middleware
-  io.use(socketAuth);
-
-  io.on('connection', (socket) => {
+  io.use(socketAuth);  io.on('connection', async (socket) => {
     console.log(`✅ User connected: ${socket.user.username} (${socket.user._id})`);
 
     // Join user to their personal room for private notifications
     const userRoom = generateUserRoomId(socket.user._id);
     socket.join(userRoom);
+    
+    console.log(`📱 User ${socket.user.username} joined personal room: ${userRoom}`);
 
     // Set user as online
     updateUserOnlineStatus(socket.user._id, true);
+
+    // Mark undelivered messages as delivered when user comes online
+    await markPendingMessagesAsDelivered(socket.user._id);
 
     // Handle joining chat rooms
     socket.on('join-chat', async (chatId) => {
@@ -82,15 +85,13 @@ const initializeSocket = (server) => {
         userId: socket.user._id,
         username: socket.user.username
       });
-    });
-
-    // Handle sending messages
+    });    // Handle sending messages
     socket.on('send-message', async (data) => {
       try {
         const { chatId, content, messageType = 'text', replyTo, mentions } = data;
 
         // Verify user is member of the chat
-        const chat = await Chat.findById(chatId);
+        const chat = await Chat.findById(chatId).populate('users', '_id username isOnline');
         if (!chat) {
           socket.emit('error', { message: 'Chat not found' });
           return;
@@ -127,12 +128,62 @@ const initializeSocket = (server) => {
         chat.latestMessage = message._id;
         await chat.save();
 
-        // Broadcast message to chat room
+        // Get chat room
         const chatRoom = generateChatRoomId(chatId);
+
+        // Mark message as delivered to online users automatically
+        const onlineUsers = chat.users.filter(user => 
+          user.isOnline && user._id.toString() !== socket.user._id.toString()
+        );
+
+        for (const user of onlineUsers) {
+          await message.markAsDelivered(user._id);
+        }
+
+        // Populate delivery status
+        await message.populate('deliveredTo.user', 'username');
+        await message.populate('readBy.user', 'username');        // Broadcast message to chat room
         io.to(chatRoom).emit('new-message', message);
 
-        // Send push notifications to offline users (would integrate with FCM/APNS)
-        // notifyOfflineUsers(chat, message);
+        // Update chat list for all users in the chat
+        const updatedChat = await Chat.findById(chatId)
+          .populate('users', 'username email profilePic isOnline lastSeen')
+          .populate('latestMessage')
+          .populate('groupAdmin', 'username email profilePic');
+
+        // Broadcast chat update to all users
+        chat.users.forEach(user => {
+          const userId = user._id.toString();
+          const chatData = updatedChat.toObject();
+          chatData.isGroup = chatData.isGroupChat;
+          
+          if (!updatedChat.isGroupChat && updatedChat.users.length === 2) {
+            const otherUser = updatedChat.users.find(u => u._id.toString() !== userId);
+            chatData.displayName = otherUser ? otherUser.username : 'Unknown User';
+            chatData.displayImage = otherUser ? otherUser.profilePic : '';
+            chatData.isOnline = otherUser ? otherUser.isOnline : false;
+            chatData.lastSeen = otherUser ? otherUser.lastSeen : null;
+          } else {
+            chatData.displayName = updatedChat.chatName;
+            chatData.displayImage = updatedChat.groupImage;
+          }
+          
+          io.to(`user_${userId}`).emit('chat-updated', chatData);
+        });
+
+        // Send delivery confirmations to sender
+        socket.emit('message-delivered', {
+          messageId: message._id,
+          deliveredTo: message.deliveredTo
+        });
+
+        // Send push notifications to offline users
+        const offlineUsers = chat.users.filter(user => 
+          !user.isOnline && user._id.toString() !== socket.user._id.toString()
+        );
+        if (offlineUsers.length > 0) {
+          notifyOfflineUsers(offlineUsers, message);
+        }
 
         console.log(`💬 Message sent in chat ${chatId} by ${socket.user.username}`);
       } catch (error) {
@@ -166,9 +217,7 @@ const initializeSocket = (server) => {
       });
 
       console.log(`⌨️  ${socket.user.username} stopped typing in chat ${chatId}`);
-    });
-
-    // Handle message read receipts
+    });    // Handle message read receipts
     socket.on('mark-message-read', async (data) => {
       try {
         const { messageId, chatId } = data;
@@ -184,20 +233,88 @@ const initializeSocket = (server) => {
           return;
         }
 
+        // Mark as delivered first if not already
+        await message.markAsDelivered(socket.user._id);
+        
+        // Mark as read
         await message.markAsRead(socket.user._id);
+
+        // Populate read status
+        await message.populate('readBy.user', 'username profilePic');
 
         // Notify sender about read receipt
         const chatRoom = generateChatRoomId(chatId);
         socket.to(chatRoom).emit('message-read', {
           messageId,
-          readBy: socket.user._id,
-          readAt: new Date()
+          readBy: {
+            user: socket.user._id,
+            username: socket.user.username,
+            profilePic: socket.user.profilePic,
+            readAt: new Date()
+          }
+        });
+
+        // Send updated read status to all chat members
+        io.to(chatRoom).emit('message-status-updated', {
+          messageId,
+          readBy: message.readBy,
+          deliveredTo: message.deliveredTo
         });
 
         console.log(`✅ Message ${messageId} marked as read by ${socket.user.username}`);
       } catch (error) {
         console.error('Mark message read error:', error);
         socket.emit('error', { message: 'Failed to mark message as read' });
+      }
+    });
+
+    // Handle marking multiple messages as read (when user enters chat)
+    socket.on('mark-chat-messages-read', async (data) => {
+      try {
+        const { chatId, lastMessageId } = data;
+
+        // Find all unread messages up to lastMessageId
+        const unreadMessages = await Message.find({
+          chat: chatId,
+          sender: { $ne: socket.user._id },
+          _id: { $lte: lastMessageId },
+          'readBy.user': { $ne: socket.user._id }
+        });
+
+        const chatRoom = generateChatRoomId(chatId);
+        const readUpdates = [];
+
+        for (const message of unreadMessages) {
+          await message.markAsDelivered(socket.user._id);
+          await message.markAsRead(socket.user._id);
+          
+          readUpdates.push({
+            messageId: message._id,
+            readBy: {
+              user: socket.user._id,
+              username: socket.user.username,
+              profilePic: socket.user.profilePic,
+              readAt: new Date()
+            }
+          });
+        }
+
+        // Notify other users about bulk read receipts
+        if (readUpdates.length > 0) {
+          socket.to(chatRoom).emit('messages-bulk-read', {
+            readUpdates,
+            readByUser: {
+              _id: socket.user._id,
+              username: socket.user.username,
+              profilePic: socket.user.profilePic
+            }
+          });
+        }
+
+        console.log(`✅ ${unreadMessages.length} messages marked as read by ${socket.user.username} in chat ${chatId}`);
+      } catch (error) {
+        console.error('Mark chat messages read error:', error);
+        socket.emit('error', { message: 'Failed to mark messages as read' });
       }
     });
 
@@ -327,6 +444,48 @@ const initializeSocket = (server) => {
   return io;
 };
 
+// Helper function to mark pending messages as delivered when user comes online
+const markPendingMessagesAsDelivered = async (userId) => {
+  try {
+    // Find user's chats
+    const userChats = await Chat.find({ users: { $in: [userId] } });
+    
+    for (const chat of userChats) {
+      // Find undelivered messages for this user in this chat
+      const undeliveredMessages = await Message.find({
+        chat: chat._id,
+        sender: { $ne: userId },
+        'deliveredTo.user': { $ne: userId },
+        createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Only last 7 days
+      });
+
+      const chatRoom = generateChatRoomId(chat._id);
+      const deliveryUpdates = [];
+
+      for (const message of undeliveredMessages) {
+        await message.markAsDelivered(userId);
+        deliveryUpdates.push({
+          messageId: message._id,
+          deliveredTo: {
+            user: userId,
+            deliveredAt: new Date()
+          }
+        });
+      }
+
+      // Notify chat room about delivery updates
+      if (deliveryUpdates.length > 0) {
+        io.to(chatRoom).emit('messages-bulk-delivered', {
+          deliveryUpdates,
+          deliveredToUser: userId
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Mark pending messages as delivered error:', error);
+  }
+};
+
 // Helper function to update user online status
 const updateUserOnlineStatus = async (userId, isOnline) => {
   try {
@@ -360,16 +519,26 @@ const broadcastUserStatusChange = async (userId, isOnline) => {
 };
 
 // Helper function for push notifications (placeholder)
-const notifyOfflineUsers = async (chat, message) => {
+const notifyOfflineUsers = async (offlineUsers, message) => {
   try {
-    // Get offline users in the chat
-    const offlineUsers = await User.find({
-      _id: { $in: chat.users },
-      isOnline: false
-    });
-
     // Here you would integrate with FCM/APNS to send push notifications
-    console.log(`📱 Would send push notifications to ${offlineUsers.length} offline users`);
+    console.log(`📱 Would send push notifications to ${offlineUsers.length} offline users for message: ${message.content?.substring(0, 50)}...`);
+    
+    // For each offline user, you could:
+    // 1. Store notification in database
+    // 2. Send push notification via FCM/APNS
+    // 3. Send email notification if enabled
+    
+    // Example notification payload:
+    // {
+    //   title: message.sender.username,
+    //   body: message.content,
+    //   data: {
+    //     chatId: message.chat,
+    //     messageId: message._id,
+    //     type: 'new_message'
+    //   }
+    // }
   } catch (error) {
     console.error('Notify offline users error:', error);
   }

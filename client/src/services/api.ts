@@ -113,6 +113,19 @@ export const authAPI = {
     },
   }),
   searchUsers: (query: string) => api.get(`/auth/search?q=${encodeURIComponent(query)}`),
+  changePassword: (passwordData: any) => api.put('/auth/change-password', passwordData),
+  deleteAccount: (password: string) => api.delete('/auth/account', { data: { password } }),
+  
+  // Friends related endpoints
+  getAllUsers: (page = 1, limit = 20) => api.get(`/users?page=${page}&limit=${limit}`),
+  getFriends: () => api.get('/friends'),
+  sendFriendRequest: (userId: string) => api.post(`/friends/request/${userId}`),
+  acceptFriendRequest: (userId: string) => api.post(`/friends/accept/${userId}`),
+  rejectFriendRequest: (userId: string) => api.post(`/friends/reject/${userId}`),
+  cancelFriendRequest: (userId: string) => api.post(`/friends/cancel/${userId}`),
+  removeFriend: (userId: string) => api.delete(`/friends/${userId}`),
+  getPendingRequests: () => api.get('/friends/pending'),
+  getSentRequests: () => api.get('/friends/sent'),
 };
 
 // Chat API calls
@@ -141,6 +154,15 @@ export const messageAPI = {
   deleteMessage: (messageId: string) => api.delete(`/messages/${messageId}`),
   addReaction: (messageId: string, emoji: string) => api.post(`/messages/${messageId}/react`, { emoji }),
   removeReaction: (messageId: string, emoji: string) => api.delete(`/messages/${messageId}/react`, { data: { emoji } }),
+  
+  // Message status endpoints
+  markMessageDelivered: (messageId: string) => api.put(`/messages/${messageId}/delivered`),
+  markMessageRead: (messageId: string) => api.put(`/messages/${messageId}/read`),
+  getMessageStatus: (messageId: string) => api.get(`/messages/${messageId}/status`),
+  getUnreadCount: (chatId: string, lastReadAt?: string) => {
+    const params = lastReadAt ? { lastReadAt } : {};
+    return api.get(`/messages/${chatId}/unread-count`, { params });
+  },
 };
 
 // Enhanced API calls with toast notifications
@@ -189,8 +211,17 @@ export const enhancedMessageAPI = {
       return response;
     } catch (error: any) {
       throw error;
-    }
-  }
+    }  }
+};
+
+// Notification API calls
+export const notificationAPI = {
+  getNotifications: (page = 1, limit = 20, unreadOnly = false) => 
+    api.get(`/notifications?page=${page}&limit=${limit}&unreadOnly=${unreadOnly}`),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markAsRead: (notificationIds?: string[]) => api.put('/notifications/read', { notificationIds }),
+  deleteNotification: (id: string) => api.delete(`/notifications/${id}`),
+  clearAll: () => api.delete('/notifications')
 };
 
 export default api;

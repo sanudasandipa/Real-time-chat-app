@@ -3,6 +3,7 @@ const Chat = require('../models/Chat');
 const User = require('../models/User');
 const { sendSuccess, sendError, getPaginationData } = require('../utils/helpers');
 const { extractPublicId, deleteFromCloudinary, generateVideoThumbnail } = require('../utils/cloudinary');
+const { createAndSendNotification } = require('./notificationController');
 
 // @desc    Get messages for a chat
 // @route   GET /api/messages/:chatId
@@ -113,9 +114,7 @@ const sendMessage = async (req, res) => {
     // Populate message for response
     await message.populate('sender', 'username email profilePic');
     await message.populate('replyTo', 'content sender messageType mediaUrl');
-    await message.populate('mentions', 'username email profilePic');
-
-    // Update chat's latest message
+    await message.populate('mentions', 'username email profilePic');    // Update chat's latest message
     chat.latestMessage = message._id;
     await chat.save();
 
@@ -140,6 +139,29 @@ const sendMessage = async (req, res) => {
     const responseData = message.toObject();
     if (thumbnail) {
       responseData.thumbnail = thumbnail;
+    }
+
+    // Send notifications to other users
+    const io = req.app.get('io');
+
+    // Create notifications for offline users
+    for (const user of otherUsers) {
+      const userId = user._id ? user._id : user;
+      const isOnline = user.isOnline || false;
+      
+      if (!isOnline) {
+        await createAndSendNotification({
+          recipient: userId,
+          sender: req.user._id,
+          type: 'message',
+          title: chat.isGroupChat ? `${chat.chatName}` : `${req.user.username}`,
+          message: messageType === 'text' ? content.substring(0, 100) : `Sent ${messageType}`,
+          data: {
+            chatId: chat._id,
+            messageId: message._id
+          }
+        }, io);
+      }
     }
 
     return sendSuccess(res, { message: responseData }, 'Message sent successfully', 201);
@@ -326,122 +348,138 @@ const removeReaction = async (req, res) => {
   }
 };
 
-// @desc    Mark message as read
-// @route   POST /api/messages/:messageId/read
+// @desc    Mark message as delivered
+// @route   PUT /api/messages/:messageId/delivered
 // @access  Private
-const markMessageAsRead = async (req, res) => {
+const markMessageDelivered = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user._id;
 
     const message = await Message.findById(messageId);
+    if (!message) {
+      return sendError(res, 'Message not found', 404);
+    }
 
+    // Don't mark own messages as delivered
+    if (message.sender.toString() === userId.toString()) {
+      return sendError(res, 'Cannot mark own message as delivered', 400);
+    }
+
+    await message.markAsDelivered(userId);
+
+    return sendSuccess(res, {
+      messageId,
+      deliveredAt: new Date()
+    }, 'Message marked as delivered');
+
+  } catch (error) {
+    console.error('Mark message delivered error:', error);
+    return sendError(res, 'Failed to mark message as delivered', 500);
+  }
+};
+
+// @desc    Mark message as read
+// @route   PUT /api/messages/:messageId/read
+// @access  Private
+const markMessageRead = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
     if (!message) {
       return sendError(res, 'Message not found', 404);
     }
 
     // Don't mark own messages as read
     if (message.sender.toString() === userId.toString()) {
-      return sendSuccess(res, null, 'Cannot mark own message as read');
+      return sendError(res, 'Cannot mark own message as read', 400);
     }
 
-    // Verify user is member of the chat
-    const chat = await Chat.findById(message.chat);
-    const isMember = chat.users.some(user => {
-      const chatUserId = user._id ? user._id.toString() : user.toString();
-      return chatUserId === userId.toString();
-    });
-
-    if (!isMember) {
-      return sendError(res, 'Access denied', 403);
-    }
-
-    // Mark message as read
+    // Mark as delivered first if not already
+    await message.markAsDelivered(userId);
     await message.markAsRead(userId);
 
-    return sendSuccess(res, null, 'Message marked as read');
+    return sendSuccess(res, {
+      messageId,
+      readAt: new Date()
+    }, 'Message marked as read');
 
   } catch (error) {
-    console.error('Mark message as read error:', error);
+    console.error('Mark message read error:', error);
     return sendError(res, 'Failed to mark message as read', 500);
   }
 };
 
-// @desc    Forward a message
-// @route   POST /api/messages/:messageId/forward
+// @desc    Get message status
+// @route   GET /api/messages/:messageId/status
 // @access  Private
-const forwardMessage = async (req, res) => {
+const getMessageStatus = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { chatIds } = req.body; // Array of chat IDs to forward to
     const userId = req.user._id;
 
-    if (!Array.isArray(chatIds) || chatIds.length === 0) {
-      return sendError(res, 'At least one chat ID is required', 400);
-    }
+    const message = await Message.findById(messageId)
+      .populate('deliveredTo.user', 'username profilePic')
+      .populate('readBy.user', 'username profilePic');
 
-    const originalMessage = await Message.findById(messageId)
-      .populate('sender', 'username email profilePic');
-
-    if (!originalMessage) {
+    if (!message) {
       return sendError(res, 'Message not found', 404);
     }
 
-    // Verify user has access to the original message
-    const originalChat = await Chat.findById(originalMessage.chat);
-    const hasAccess = originalChat.users.some(user => {
-      const chatUserId = user._id ? user._id.toString() : user.toString();
-      return chatUserId === userId.toString();
-    });
-
-    if (!hasAccess) {
-      return sendError(res, 'Access denied to original message', 403);
+    // Only sender can check message status
+    if (message.sender.toString() !== userId.toString()) {
+      return sendError(res, 'Unauthorized to view message status', 403);
     }
 
-    // Verify user is member of all target chats
-    const targetChats = await Chat.find({ 
-      _id: { $in: chatIds },
-      users: { $in: [userId] }
-    });
+    // Get chat to find all recipients
+    const chat = await Chat.findById(message.chat).populate('users', '_id username');
+    const recipients = chat.users.filter(user => user._id.toString() !== userId.toString());
 
-    if (targetChats.length !== chatIds.length) {
-      return sendError(res, 'Access denied to one or more target chats', 403);
-    }
+    const status = {
+      messageId,
+      sent: true,
+      delivered: message.deliveredTo,
+      read: message.readBy,
+      totalRecipients: recipients.length,
+      deliveredCount: message.deliveredTo.length,
+      readCount: message.readBy.length
+    };
 
-    // Create forwarded messages
-    const forwardedMessages = await Promise.all(
-      chatIds.map(async (chatId) => {
-        const forwardedMessage = await Message.create({
-          sender: userId,
-          chat: chatId,
-          content: originalMessage.content,
-          messageType: originalMessage.messageType,
-          mediaUrl: originalMessage.mediaUrl,
-          mediaType: originalMessage.mediaType,
-          mediaSize: originalMessage.mediaSize,
-          mediaName: originalMessage.mediaName,
-          forwardedFrom: {
-            originalSender: originalMessage.sender._id,
-            originalChat: originalMessage.chat,
-            forwardedAt: new Date()
-          }
-        });
-
-        // Update chat's latest message
-        await Chat.findByIdAndUpdate(chatId, { latestMessage: forwardedMessage._id });
-
-        return forwardedMessage;
-      })
-    );
-
-    return sendSuccess(res, { 
-      forwardedMessages: forwardedMessages.length,
-      messages: forwardedMessages 
-    }, 'Message forwarded successfully');
+    return sendSuccess(res, status, 'Message status retrieved');
 
   } catch (error) {
-    console.error('Forward message error:', error);
-    return sendError(res, 'Failed to forward message', 500);
+    console.error('Get message status error:', error);
+    return sendError(res, 'Failed to get message status', 500);
+  }
+};
+
+// @desc    Get unread message count for a chat
+// @route   GET /api/messages/:chatId/unread-count
+// @access  Private
+const getUnreadCount = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const userId = req.user._id;
+
+    // Verify user is member of the chat
+    const chat = req.chat || await Chat.findById(chatId);
+    if (!chat) {
+      return sendError(res, 'Chat not found', 404);
+    }
+
+    const lastReadAt = req.query.lastReadAt ? new Date(req.query.lastReadAt) : new Date(0);
+    const unreadCount = await Message.getUnreadCount(chatId, userId, lastReadAt);
+
+    return sendSuccess(res, {
+      chatId,
+      unreadCount
+    }, 'Unread count retrieved');
+
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    return sendError(res, 'Failed to get unread count', 500);
   }
 };
 
@@ -514,7 +552,9 @@ module.exports = {
   deleteMessage,
   addReaction,
   removeReaction,
-  markMessageAsRead,
-  forwardMessage,
-  searchMessages
+  searchMessages,
+  markMessageDelivered,
+  markMessageRead,
+  getMessageStatus,
+  getUnreadCount
 };

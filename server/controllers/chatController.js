@@ -14,11 +14,12 @@ const getChats = async (req, res) => {
 
     const chats = await Chat.findUserChats(userId)
       .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit));
-
-    // Get unread message counts for each chat
+      .skip((parseInt(page) - 1) * parseInt(limit));    // Get unread message counts for each chat
     const chatData = await Promise.all(chats.map(async (chat) => {
       const chatObj = chat.toObject();
+      
+      // Add compatibility field for frontend
+      chatObj.isGroup = chatObj.isGroupChat;
       
       // Get last read timestamp for current user
       const readEntry = chat.readBy.find(entry => entry.user.toString() === userId.toString());
@@ -79,13 +80,12 @@ const createOrGetPrivateChat = async (req, res) => {
     const otherUser = await User.findById(userId).select('username email profilePic isOnline lastSeen');
     if (!otherUser) {
       return sendError(res, 'User not found', 404);
-    }
-
-    // Find or create private chat
-    const chat = await Chat.findOrCreatePrivateChat(currentUserId, userId);
+    }    // Find or create private chat
+    const chat = await Chat.findOrCreatePrivateChat(currentUserId, userId);    console.log('💬 Chat created/found:', chat._id);
 
     // Format chat data
     const chatData = chat.toObject();
+    chatData.isGroup = chatData.isGroupChat; // Add compatibility field
     chatData.displayName = otherUser.username;
     chatData.displayImage = otherUser.profilePic;
     chatData.isOnline = otherUser.isOnline;
@@ -96,6 +96,21 @@ const createOrGetPrivateChat = async (req, res) => {
     const lastReadAt = readEntry ? readEntry.readAt : new Date(0);
     const unreadCount = await Message.getUnreadCount(chat._id, currentUserId, lastReadAt);
     chatData.unreadCount = unreadCount;
+
+    console.log('📤 Sending chat data:', { chatId: chatData._id, displayName: chatData.displayName });
+
+    // Emit real-time update for new chat creation
+    const io = req.app.get('io');
+    if (io) {
+      // Notify current user
+      io.to(`user_${currentUserId}`).emit('new-chat', chatData);
+      
+      // Notify other user
+      const otherUserChatData = { ...chatData };
+      otherUserChatData.displayName = req.user.username;
+      otherUserChatData.displayImage = req.user.profilePic;
+      io.to(`user_${userId}`).emit('new-chat', otherUserChatData);
+    }
 
     return sendSuccess(res, { chat: chatData }, 'Private chat retrieved successfully');
 
@@ -147,16 +162,23 @@ const createGroupChat = async (req, res) => {
         user: userId,
         role: userId.toString() === currentUserId.toString() ? 'admin' : 'member'
       }))
-    });
-
-    // Populate the created chat
+    });    // Populate the created chat
     await chat.populate('users', 'username email profilePic isOnline lastSeen');
     await chat.populate('groupAdmin', 'username email profilePic');
 
     const chatData = chat.toObject();
-    chatData.displayName = chat.chatName;
+    chatData.isGroup = chatData.isGroupChat; // Add compatibility field    chatData.displayName = chat.chatName;
     chatData.displayImage = chat.groupImage;
     chatData.unreadCount = 0; // New chat, no unread messages
+
+    // Emit real-time update for new group chat creation
+    const io = req.app.get('io');
+    if (io) {
+      // Notify all users in the group
+      uniqueUsers.forEach(userId => {
+        io.to(`user_${userId}`).emit('new-chat', chatData);
+      });
+    }
 
     return sendSuccess(res, { chat: chatData }, 'Group chat created successfully', 201);
 
@@ -187,10 +209,9 @@ const getChatDetails = async (req, res) => {
     const isMember = chat.users.some(user => user._id.toString() === userId.toString());
     if (!isMember) {
       return sendError(res, 'Access denied', 403);
-    }
-
-    // Format chat data
+    }    // Format chat data
     const chatData = chat.toObject();
+    chatData.isGroup = chatData.isGroupChat; // Add compatibility field
     
     if (!chat.isGroupChat && chat.users.length === 2) {
       const otherUser = chat.users.find(user => user._id.toString() !== userId.toString());

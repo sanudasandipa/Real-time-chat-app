@@ -18,6 +18,8 @@ const { errorHandler, notFound } = require('./middlewares/errorMiddleware');
 const authRoutes = require('./routes/authRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const friendsRoutes = require('./routes/friendsRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Initialize express app
 const app = express();
@@ -28,6 +30,9 @@ connectDB();
 
 // Initialize Socket.io
 const io = initializeSocket(server);
+
+// Make io available to all routes
+app.set('io', io);
 
 // Security middleware
 app.use(helmet({
@@ -93,6 +98,8 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api', friendsRoutes);
 
 // Serve static files (for uploaded files)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

@@ -139,7 +139,7 @@ const getMe = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const user = req.user;
-    const allowedUpdates = ['username', 'bio', 'phoneNumber', 'dateOfBirth'];
+    const allowedUpdates = ['username', 'bio', 'phoneNumber', 'location', 'dateOfBirth'];
     const updates = {};
 
     // Filter allowed updates
@@ -179,17 +179,35 @@ const updateProfile = async (req, res) => {
 // @access  Private
 const uploadProfilePicture = async (req, res) => {
   try {
+    console.log('Upload profile picture request received');
+    console.log('User:', req.user ? req.user._id : 'No user');
+    console.log('File:', req.file ? 'File present' : 'No file');
+    console.log('Cloudinary config:', {
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
+      api_secret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
+    });
+
     const user = req.user;
 
     if (!req.file) {
+      console.log('No file provided in request');
       return sendError(res, 'No image file provided', 400);
     }
+
+    console.log('File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      path: req.file.path
+    });
 
     // Delete old profile picture if exists
     if (user.profilePic) {
       try {
         const publicId = extractPublicId(user.profilePic);
         if (publicId) {
+          console.log('Deleting old profile picture:', publicId);
           await deleteFromCloudinary(publicId);
         }
       } catch (error) {
@@ -199,6 +217,7 @@ const uploadProfilePicture = async (req, res) => {
     }
 
     // Update user with new profile picture URL
+    console.log('Updating user profile picture URL:', req.file.path);
     user.profilePic = req.file.path;
     await user.save();
 

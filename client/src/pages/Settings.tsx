@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { authAPI } from '../services/api';
 import toastService from '../services/toast';
 import './Settings.css';
 
-const Settings: React.FC = () => {
-  const { user, updateProfile, logout } = useAuth();
+const Settings: React.FC = () => {  const { user, updateProfile, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -95,62 +95,61 @@ const Settings: React.FC = () => {
     
     const settingName = String(settingKey).replace(/([A-Z])/g, ' $1').toLowerCase();
     toastService.success(`${settingName} ${newValue ? 'enabled' : 'disabled'}`);
-  };  const handleDeleteAccount = async () => {
-    // Open the delete modal instead of using browser prompts
+  };  const handleDeleteAccount = () => {
+    // Reset password field and show modal
+    setDeletePassword('');
     setShowDeleteModal(true);
   };
-
+  
   const confirmDeleteAccount = async () => {
     if (!deletePassword.trim()) {
       toastService.error('Password is required to delete your account');
       return;
     }
-    
+
     try {
       setLoading(true);
       
-      // Get fresh token to avoid auth issues
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) {
-        toastService.error('Please log in again to delete your account');
-        setShowDeleteModal(false);
-        return;
-      }
+      // Use the authAPI which handles token refresh automatically
+      await authAPI.deleteAccount(deletePassword);
 
-      const response = await fetch('http://localhost:5000/api/auth/account', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`
-        },
-        body: JSON.stringify({ password: deletePassword })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete account');
-      }
-
+      // Give visual feedback
       toastService.success('Account deleted successfully');
+      
+      // Clear all local storage and session storage
+      Object.keys(localStorage).forEach(key => localStorage.removeItem(key));
+      Object.keys(sessionStorage).forEach(key => sessionStorage.removeItem(key));
+      
+      // Close the modal
       setShowDeleteModal(false);
-      logout();
-      navigate('/login');
+      
+      // Add a slight delay before redirecting to allow the user to see the success message
+      setTimeout(() => {
+        logout();
+        navigate('/login', { replace: true });
+      }, 1500);
     } catch (error: any) {
       console.error('Delete account error:', error);
       let errorMessage = 'Failed to delete account';
       
-      if (error.message) {
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+        // Specific handling for common error messages
+        if (errorMessage.toLowerCase().includes('password') && 
+            (errorMessage.toLowerCase().includes('incorrect') || 
+             errorMessage.toLowerCase().includes('invalid'))) {
+          errorMessage = 'Incorrect password. Please try again.';
+        }
+      } else if (error.message) {
         if (error.message.includes('unauthorized') || error.message.includes('authentication') || error.message.includes('Token verification failed')) {
-          errorMessage = 'Session expired. Please log in again to delete your account.';
-          // Auto-redirect to login if token is invalid
+          errorMessage = 'Your session has expired. Please log in again to delete your account.';
+          // Auto logout on token failure
           setTimeout(() => {
             logout();
-            navigate('/login');
+            navigate('/login', { replace: true });
           }, 2000);
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
           errorMessage = 'Network error. Please check your connection and try again.';
-        } else if (error.message.includes('password')) {
-          errorMessage = error.message;
         } else {
           errorMessage = error.message;
         }
@@ -161,6 +160,30 @@ const Settings: React.FC = () => {
       setLoading(false);
     }
   };
+  const cancelDeleteAccount = () => {
+    setShowDeleteModal(false);
+    setDeletePassword('');
+  };
+  
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showDeleteModal) {
+        cancelDeleteAccount();
+      }
+    };
+
+    if (showDeleteModal) {
+      document.addEventListener('keydown', handleEscKey);
+      // Prevent background scrolling when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+      document.body.style.overflow = '';
+    };
+  }, [showDeleteModal]);
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -223,46 +246,14 @@ const Settings: React.FC = () => {
     if (!passwordRegex.test(formData.newPassword)) {
       toastService.error('New password must contain at least one uppercase letter, one lowercase letter, and one number');
       return;
-    }
-
-    setLoading(true);
+    }    setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/change-password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword,
-          confirmPassword: formData.confirmPassword // Backend validation requires this
-        })
+      // Use the authAPI which handles token refresh automatically
+      await authAPI.changePassword({
+        currentPassword: formData.currentPassword,
+        newPassword: formData.newPassword,
+        confirmPassword: formData.confirmPassword // Backend validation requires this
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        
-        // Handle specific validation errors
-        if (errorData.errors) {
-          const errorMessages = Object.values(errorData.errors).join(', ');
-          throw new Error(errorMessages);
-        }
-        
-        // Handle general errors with user-friendly messages
-        let errorMessage = 'Failed to change password';
-        if (errorData.message) {
-          if (errorData.message.includes('current password') || errorData.message.includes('incorrect')) {
-            errorMessage = 'Current password is incorrect';
-          } else if (errorData.message.includes('validation')) {
-            errorMessage = 'Please check your password requirements';
-          } else {
-            errorMessage = errorData.message;
-          }
-        }
-        
-        throw new Error(errorMessage);
-      }
       
       toastService.success('Password changed successfully! Please login again for security.');
       
@@ -279,10 +270,28 @@ const Settings: React.FC = () => {
         logout();
         navigate('/login');
       }, 2000); // Give user time to see the success message
-      
-    } catch (error: any) {
+        } catch (error: any) {
       console.error('Password change error:', error);
-      toastService.error(error.message || 'Failed to change password. Please try again.');
+      
+      let errorMessage = 'Failed to change password. Please try again.';
+      
+      if (error.response?.data?.message) {
+        const message = error.response.data.message;
+        if (message.includes('current password') || message.includes('incorrect')) {
+          errorMessage = 'Current password is incorrect';
+        } else if (message.includes('validation')) {
+          errorMessage = 'Please check your password requirements';
+        } else {
+          errorMessage = message;
+        }
+      } else if (error.response?.data?.errors) {
+        const errorMessages = Object.values(error.response.data.errors).join(', ');
+        errorMessage = errorMessages;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toastService.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -802,55 +811,51 @@ const Settings: React.FC = () => {
                   ) : (
                     <i className="bi bi-eraser"></i>
                   )}                  Clear Data
-                </button>
-              </div>
+                </button>              </div>
             </div>
           </div>
         </div>
-      </div>      </div>
-
-      {/* Delete Account Confirmation Modal */}
+      </div>      </div>      {/* Delete Account Modal */}
       {showDeleteModal && (
         <div 
           className="modal-overlay" 
-          onClick={() => {
-            setShowDeleteModal(false);
-            setDeletePassword('');
-          }}
+          onClick={cancelDeleteAccount}
         >
           <div 
-            className="modal" 
+            className="modal delete-account-modal" 
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header">
-              <h3>Delete Account</h3>
+            <div className="modal-header danger-header">
+              <h3>
+                <i className="bi bi-exclamation-triangle-fill"></i>
+                Delete Account
+              </h3>
               <button 
                 className="modal-close"
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeletePassword('');
-                }}
+                onClick={cancelDeleteAccount}
               >
                 <i className="bi bi-x"></i>
               </button>
             </div>
             <div className="modal-body">
-              <div className="delete-warning">
-                <i className="bi bi-exclamation-triangle"></i>
-                <h4>Are you sure you want to delete your account?</h4>
-                <p>This action cannot be undone and will result in:</p>
+              <div className="warning-message">
+                <i className="bi bi-exclamation-triangle-fill"></i>
+                <h4>This action cannot be undone!</h4>
               </div>
-              <ul>
-                <li>All your chat history will be permanently deleted</li>
-                <li>You will be removed from all conversations</li>
-                <li>Your profile information will be deleted</li>
-                <li>You will lose access to all your data</li>
+              
+              <p>Are you sure you want to delete your account? The following will happen:</p>
+              <ul className="consequences-list">
+                <li><i className="bi bi-chat-dots"></i> All your chat history will be permanently deleted</li>
+                <li><i className="bi bi-people"></i> You will be removed from all conversations</li>
+                <li><i className="bi bi-person"></i> Your profile information will be deleted</li>
+                <li><i className="bi bi-database"></i> You will lose access to all your data</li>
               </ul>
+              
               <div className="form-group">
                 <label htmlFor="deletePassword">
+                  <i className="bi bi-shield-lock"></i>
                   Enter your current password to confirm:
-                </label>
-                <input
+                </label>                <input
                   type="password"
                   id="deletePassword"
                   className="form-input"
@@ -858,23 +863,28 @@ const Settings: React.FC = () => {
                   onChange={(e) => setDeletePassword(e.target.value)}
                   placeholder="Enter your password"
                   autoComplete="current-password"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && deletePassword.trim()) {
+                      confirmDeleteAccount();
+                    }
+                  }}
                 />
               </div>
             </div>
             <div className="modal-footer">
               <button 
                 className="btn-secondary"
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeletePassword('');
-                }}
+                onClick={cancelDeleteAccount}
+                disabled={loading}
               >
+                <i className="bi bi-x-circle"></i>
                 Cancel
               </button>
               <button 
                 className="btn-danger"
                 onClick={confirmDeleteAccount}
-                disabled={!deletePassword.trim() || loading}
+                disabled={loading || !deletePassword.trim()}
               >
                 {loading ? (
                   <>

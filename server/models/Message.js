@@ -247,13 +247,49 @@ messageSchema.methods.isVisibleToUser = function(userId) {
 };
 
 // Method to get read status for message
-messageSchema.methods.getReadStatus = function(chatUsers) {
-  const readCount = this.readBy.length;
-  const totalUsers = chatUsers.length - 1; // Exclude sender
+messageSchema.methods.getReadStatus = function(chatUsers, currentUserId) {
+  // Don't show status for other users' messages
+  if (this.sender.toString() !== currentUserId.toString()) {
+    return null;
+  }
+
+  const otherUsers = chatUsers.filter(userId => userId.toString() !== currentUserId.toString());
+  const deliveredCount = this.deliveredTo.filter(delivery => 
+    otherUsers.some(userId => userId.toString() === delivery.user.toString())
+  ).length;
+  const readCount = this.readBy.filter(read => 
+    otherUsers.some(userId => userId.toString() === read.user.toString())
+  ).length;
   
-  if (readCount === 0) return 'sent';
-  if (readCount < totalUsers) return 'delivered';
-  return 'read';
+  if (readCount === otherUsers.length && otherUsers.length > 0) {
+    return 'read'; // All users have read
+  } else if (deliveredCount === otherUsers.length && otherUsers.length > 0) {
+    return 'delivered'; // All users have received
+  } else if (deliveredCount > 0) {
+    return 'delivered'; // Some users have received
+  } else {
+    return 'sent'; // Just sent
+  }
+};
+
+// Method to get detailed read status with user info
+messageSchema.methods.getDetailedReadStatus = function(chatUsers, currentUserId) {
+  if (this.sender.toString() !== currentUserId.toString()) {
+    return null;
+  }
+
+  const otherUsers = chatUsers.filter(userId => userId.toString() !== currentUserId.toString());
+  
+  return {
+    sent: true,
+    delivered: this.deliveredTo.filter(delivery => 
+      otherUsers.some(userId => userId.toString() === delivery.user.toString())
+    ),
+    read: this.readBy.filter(read => 
+      otherUsers.some(userId => userId.toString() === read.user.toString())
+    ),
+    totalRecipients: otherUsers.length
+  };
 };
 
 // Static method to get messages for a chat with pagination

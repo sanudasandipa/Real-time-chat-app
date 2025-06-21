@@ -28,6 +28,14 @@ const AppContent = () => {
           } 
         />
         <Route 
+          path="/chat/:chatId" 
+          element={
+            <ProtectedRoute>
+              <ChatRoom />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
           path="/profile" 
           element={
             <ProtectedRoute>

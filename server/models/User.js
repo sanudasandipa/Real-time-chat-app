@@ -39,9 +39,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     maxlength: [200, 'Bio cannot exceed 200 characters'],
     default: ''
-  },
-  phoneNumber: {
+  },  phoneNumber: {
     type: String,
+    default: ''
+  },
+  location: {
+    type: String,
+    maxlength: [100, 'Location cannot exceed 100 characters'],
     default: ''
   },
   dateOfBirth: {

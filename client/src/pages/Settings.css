@@ -707,6 +707,77 @@ input:checked + .slider:before {
   transform: none;
 }
 
+/* Enhanced Delete Account Modal Styles */
+.danger-header {
+  background-color: var(--danger-bg, #fef2f2) !important;
+  color: var(--danger-text, #dc2626) !important;
+  border-bottom: 1px solid var(--danger-border, #fca5a5) !important;
+}
+
+.danger-header h3 {
+  color: var(--danger-text, #dc2626);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.danger-header i {
+  color: var(--danger, #dc2626);
+}
+
+.delete-account-warning {
+  background-color: var(--danger-bg-light, #fff5f5);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.delete-account-warning .danger-text {
+  color: var(--danger, #dc2626);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.danger-text i {
+  font-size: 1.1em;
+}
+
+/* Fix for modal footer buttons to match modern style */
+.delete-account-modal .modal-footer .btn-danger {
+  background: var(--danger, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s;
+}
+
+.delete-account-modal .modal-footer .btn-secondary {
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delete-account-modal .modal-footer .btn-danger:hover:not(:disabled) {
+  background: var(--danger-dark, #b91c1c);
+}
+
+.delete-account-modal .modal-footer .btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .settings-container {

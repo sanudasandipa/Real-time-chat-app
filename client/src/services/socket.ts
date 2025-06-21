@@ -66,69 +66,164 @@ class SocketService {
 
   getSocket() {
     return this.socket;
-  }
-
-  // Message events
+  }  // Message events
   sendMessage(messageData: any) {
     if (this.socket) {
-      this.socket.emit('sendMessage', messageData);
+      console.log('Sending message via socket:', messageData);
+      this.socket.emit('send-message', messageData);
+    } else {
+      console.error('Socket not connected when trying to send message');
     }
   }
 
   onNewMessage(callback: (message: any) => void) {
     if (this.socket) {
-      this.socket.on('newMessage', callback);
+      console.log('Setting up new-message listener');
+      this.socket.on('new-message', (message) => {
+        console.log('Received new message from socket:', message);
+        callback(message);
+      });
     }
   }
 
+  // Message status events
+  onMessageDelivered(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('message-delivered', callback);
+    }
+  }
+
+  onMessageRead(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('message-read', callback);
+    }
+  }
+
+  onMessageStatusUpdated(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('message-status-updated', callback);
+    }
+  }
+
+  onMessagesBulkRead(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('messages-bulk-read', callback);
+    }
+  }
+
+  onMessagesBulkDelivered(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('messages-bulk-delivered', callback);
+    }
+  }
+
+  markMessageRead(messageId: string, chatId: string) {
+    if (this.socket) {
+      this.socket.emit('mark-message-read', { messageId, chatId });
+    }
+  }
+
+  markChatMessagesRead(chatId: string, lastMessageId: string) {
+    if (this.socket) {
+      this.socket.emit('mark-chat-messages-read', { chatId, lastMessageId });
+    }
+  }
   // Typing events
   startTyping(chatId: string) {
     if (this.socket) {
-      this.socket.emit('typing', { chatId });
+      this.socket.emit('typing-start', { chatId });
     }
   }
 
   stopTyping(chatId: string) {
     if (this.socket) {
-      this.socket.emit('stopTyping', { chatId });
+      this.socket.emit('typing-stop', { chatId });
     }
   }
 
   onTyping(callback: (data: any) => void) {
     if (this.socket) {
-      this.socket.on('userTyping', callback);
+      this.socket.on('user-typing', callback);
     }
   }
-
   onStopTyping(callback: (data: any) => void) {
     if (this.socket) {
-      this.socket.on('userStoppedTyping', callback);
+      this.socket.on('user-stopped-typing', callback);
     }
   }
 
-  // Join/Leave room events
+  // Notification events
+  onNewNotification(callback: (notification: any) => void) {
+    if (this.socket) {
+      this.socket.on('new-notification', callback);
+    }
+  }
+
+  onNotificationsRead(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('notifications-read', callback);
+    }
+  }
+
+  onNotificationDeleted(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('notification-deleted', callback);
+    }
+  }
+  onNotificationsCleared(callback: () => void) {
+    if (this.socket) {
+      this.socket.on('notifications-cleared', callback);
+    }
+  }
+
+  // Chat events
   joinChat(chatId: string) {
     if (this.socket) {
-      this.socket.emit('joinChat', chatId);
+      console.log('Joining chat room:', chatId);
+      this.socket.emit('join-chat', chatId);
     }
   }
 
   leaveChat(chatId: string) {
     if (this.socket) {
-      this.socket.emit('leaveChat', chatId);
+      console.log('Leaving chat room:', chatId);
+      this.socket.emit('leave-chat', chatId);
+    }
+  }
+
+  onJoinedChat(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('joined-chat', callback);
+    }
+  }
+
+  onChatUpdated(callback: (chat: any) => void) {
+    if (this.socket) {
+      this.socket.on('chat-updated', callback);
+    }
+  }
+  onNewChat(callback: (chat: any) => void) {
+    if (this.socket) {
+      this.socket.on('new-chat', callback);
     }
   }
 
   // Online status events
-  onUserOnline(callback: (userId: string) => void) {
+  onUserOnline(callback: (data: any) => void) {
     if (this.socket) {
-      this.socket.on('userOnline', callback);
+      this.socket.on('user-online', callback);
     }
   }
 
-  onUserOffline(callback: (userId: string) => void) {
+  onUserOffline(callback: (data: any) => void) {
     if (this.socket) {
-      this.socket.on('userOffline', callback);
+      this.socket.on('user-offline', callback);
+    }
+  }
+
+  onUserStatusChange(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on('user-status-change', callback);
     }
   }
 
@@ -140,4 +235,11 @@ class SocketService {
   }
 }
 
-export default new SocketService();
+const socketServiceInstance = new SocketService();
+
+// Add to window for debugging
+if (typeof window !== 'undefined') {
+  (window as any).socketService = socketServiceInstance;
+}
+
+export default socketServiceInstance;

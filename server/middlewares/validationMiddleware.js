@@ -64,12 +64,17 @@ const validateProfileUpdate = [
     .trim()
     .isLength({ max: 200 })
     .withMessage('Bio cannot exceed 200 characters'),
-  
-  body('phoneNumber')
+    body('phoneNumber')
     .optional()
     .trim()
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Please provide a valid phone number'),
+    .isLength({ max: 20 })
+    .withMessage('Phone number cannot exceed 20 characters'),
+  
+  body('location')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Location cannot exceed 100 characters'),
   
   handleValidationErrors
 ];
